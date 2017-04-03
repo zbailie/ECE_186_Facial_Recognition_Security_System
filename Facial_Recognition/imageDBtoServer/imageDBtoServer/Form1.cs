@@ -1,15 +1,9 @@
-﻿using System;
-using System.Collections.Generic;
-using System.ComponentModel;
+using System;
 using System.Data;
 using System.Drawing;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using System.Windows.Forms;
 using System.Data.SqlClient;
 using System.IO;
-using System.Drawing.Imaging;
 
 namespace imageDBtoServer
 {
@@ -52,7 +46,7 @@ namespace imageDBtoServer
                 img = br.ReadBytes((int)fs.Length);
                 string sql = "INSERT INTO Images(userID, firstName, lastName, ImageID)Values("+textBoxUserID.Text+",'"+textBoxFirstName.Text+"','"+textBoxLastName.Text+"', @img)";
                 if (conn.State != ConnectionState.Open)
-                    conn.Open();
+                    conn.Open();                    
                 command = new SqlCommand(sql, conn);
                 command.Parameters.Add(new SqlParameter("@img", img));
                 int x = command.ExecuteNonQuery();
@@ -82,8 +76,8 @@ namespace imageDBtoServer
                 reader.Read();
                 if(reader.HasRows)
                 {
-                    textBoxFirstName.Text = reader[1].ToString();
-                    textBoxLastName.Text = reader[2].ToString();
+                    //textBoxFirstName.Text = reader[1].ToString();
+                    //textBoxLastName.Text = reader[2].ToString();
                     byte[] img = (byte[])(reader[3]);
                     if (img == null)
                         picID.Image = null;
@@ -112,6 +106,25 @@ namespace imageDBtoServer
         private void textBoxUserID_TextChanged(object sender, EventArgs e)
         {
 
+        }
+
+        private void buttonDelete_Click(object sender, EventArgs e)
+        {
+            try
+            {
+                string sql = "DELETE FROM Images WHERE userID = "+textBoxUserID.Text+"";
+                if (conn.State != ConnectionState.Open)
+                    conn.Open();
+                command = new SqlCommand(sql, conn);
+                int x = command.ExecuteNonQuery();
+                conn.Close();
+                MessageBox.Show(x.ToString() + " record(s) deleted.");
+            }
+            catch (Exception ex)
+            {
+                conn.Close();
+                MessageBox.Show(ex.Message);
+            }
         }
     }
 }
