@@ -45,7 +45,14 @@ using Windows.UI.Xaml.Media.Imaging;
 using Microsoft.ProjectOxford.Face;
 //using VideoFrameAnalyzer;
 using Windows.Media.Core;
+using Windows.Media.Devices;
 using Microsoft.ProjectOxford.Video;
+using Windows.Graphics.Imaging;
+using Windows.Devices.Enumeration;
+using System.Threading;
+using Windows.UI.Core;
+using System.Threading.Tasks;
+
 
 //Include the package for face api
 // Look into whether the source control is needed for this part
@@ -60,6 +67,9 @@ namespace fr_newer
     public sealed partial class MainPage : Page
     {
 
+        private SoftwareBitmap _backBuffer;
+        private bool _taskRunning = false;
+        private Image _imageElement; 
         private readonly FaceServiceClient faceServiceClient = new FaceServiceClient("7703c42821cf4256942c61faf78062ce");
 
         private FaceDetectionEffect _faceDetectionEffect;
@@ -174,6 +184,9 @@ namespace fr_newer
                 }
                 mediaCapture.Dispose();
                 mediaCapture = null;
+
+
+
             }
             SetInitButtonVisibility(Action.ENABLE);
         }
@@ -237,6 +250,116 @@ namespace fr_newer
                 isPreviewing = true;
                 status.Text = "Camera preview succeeded";
 
+
+// ---------------------------------------------------------------------------------------------------------
+// -------------- The stuff for the frame source -----------------------------------------------------------
+                //Take out the frames from the camera preview
+                var frameSourceGroups = await MediaFrameSourceGroup.FindAllAsync();
+                MediaFrameSourceGroup selectedGroup = null;
+                MediaFrameSourceInfo colorSourceInfo = null;
+
+                foreach (var sourceGroup in frameSourceGroups)
+                {
+                    foreach (var sourceInfo in sourceGroup.SourceInfos)
+                    {
+                        if (sourceInfo.MediaStreamType == MediaStreamType.VideoPreview
+                            && sourceInfo.SourceKind == MediaFrameSourceKind.Color)
+                        {
+                            colorSourceInfo = sourceInfo;
+                            break;
+                        }
+                    }
+                    if (colorSourceInfo != null)
+                    {
+                        selectedGroup = sourceGroup;
+                        break;
+                    }
+                }
+
+                    var selectedGroupObjects = frameSourceGroups.Select(group =>
+       new
+       {
+           sourceGroup = group,
+           colorSourceInfo = group.SourceInfos.FirstOrDefault((sourceInfo) =>
+           {
+               return sourceInfo.MediaStreamType == MediaStreamType.VideoPreview
+               && sourceInfo.SourceKind == MediaFrameSourceKind.Color
+               && sourceInfo.DeviceInformation?.EnclosureLocation.Panel == Windows.Devices.Enumeration.Panel.Front;
+           })
+
+       }).Where(t => t.colorSourceInfo != null)
+       .FirstOrDefault();
+
+                   /* MediaFrameSourceGroup*/ selectedGroup = selectedGroupObjects?.sourceGroup;
+                    /*MediaFrameSourceInfo*/ colorSourceInfo = selectedGroupObjects?.colorSourceInfo;
+
+                    if (selectedGroup == null)
+                    {
+                        return;
+                    }
+
+                //MediaCapture mediaCapture;
+                var settings = new MediaCaptureInitializationSettings()
+                {
+                    SourceGroup = selectedGroup,
+                    SharingMode = MediaCaptureSharingMode.ExclusiveControl,
+                    MemoryPreference = MediaCaptureMemoryPreference.Cpu,
+                    StreamingCaptureMode = StreamingCaptureMode.Video
+                };
+                try
+                {
+                    await mediaCapture.InitializeAsync(settings);
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine("MediaCapture initialization failed: " + ex.Message);
+                    return;
+                }
+                var colorFrameSource = mediaCapture.FrameSources[colorSourceInfo.Id];
+                var preferredFormat = colorFrameSource.SupportedFormats.Where(format =>
+                {
+                    return format.VideoFormat.Width >= 1080
+                    && format.Subtype == MediaEncodingSubtypes.Argb32;
+
+                }).FirstOrDefault();
+
+                if (preferredFormat == null)
+                {
+                    // Our desired format is not supported
+                    return;
+                }
+
+                await colorFrameSource.SetFormatAsync(preferredFormat);
+
+                MediaFrameReader _mediaFrameReader;
+
+                _mediaFrameReader = await mediaCapture.CreateFrameReaderAsync(colorFrameSource, MediaEncodingSubtypes.Argb32);
+                _mediaFrameReader.FrameArrived += ColorFrameReader_FrameArrived; 
+                await _mediaFrameReader.StartAsync();
+
+                await _mediaFrameReader.StopAsync();
+                _mediaFrameReader.FrameArrived -= ColorFrameReader_FrameArrived;
+                mediaCapture.Dispose();
+                mediaCapture = null;
+
+
+
+
+                // --------------------------------------------------------------------------------------------------------
+
+                //    //using (Stream s = (Stream)photoStream)
+                //    //{
+                //    var faces = await faceServiceClient.DetectAsync(picture, true, true);
+
+                //        foreach (var face in faces)
+                //        {
+                //            var rect = face.FaceRectangle;
+                //            var landmarks = face.FaceLandmarks;
+
+                //        }
+                //    }
+
+
                 // Enable buttons for video and photo capture
                 SetVideoButtonVisibility(Action.ENABLE);
 
@@ -258,7 +381,7 @@ namespace fr_newer
         }
 
         //Function to read the frames from the video preview
-        private async void rect(string[] args)
+   /*   private async void rect(string[] args)
         {
             FaceDetectionEffect _faceDetectionEffect; 
 
@@ -284,6 +407,8 @@ namespace fr_newer
 
         private void FaceDetectionEffect_FaceDetected(FaceDetectionEffect sender, FaceDetectedEventArgs args)
         {
+            //public struct BitmapBounds;
+
             foreach (Windows.Media.FaceAnalysis.DetectedFace face in args.ResultFrame.DetectedFaces)
             {
                 BitmapBounds faceRect = face.FaceBox;
@@ -292,7 +417,7 @@ namespace fr_newer
             }
         }
 
-
+    */ 
 
         /// <summary>
         /// 'Initialize Audio Only' button action function
@@ -550,6 +675,51 @@ namespace fr_newer
             {
                 recordAudio.IsEnabled = true;
             }
+        }
+
+        private void ColorFrameReader_FrameArrived(MediaFrameReader sender, MediaFrameArrivedEventArgs args)
+        {
+            var mediaFrameReference = sender.TryAcquireLatestFrame();
+            var videoMediaFrame = mediaFrameReference?.VideoMediaFrame;
+            var softwareBitmap = videoMediaFrame?.SoftwareBitmap;
+
+            if (softwareBitmap != null)
+            {
+                if (softwareBitmap.BitmapPixelFormat != Windows.Graphics.Imaging.BitmapPixelFormat.Bgra8 ||
+                    softwareBitmap.BitmapAlphaMode != Windows.Graphics.Imaging.BitmapAlphaMode.Premultiplied)
+                {
+                    softwareBitmap = SoftwareBitmap.Convert(softwareBitmap, BitmapPixelFormat.Bgra8, BitmapAlphaMode.Premultiplied);
+                }
+
+                // Swap the processed frame to _backBuffer and dispose of the unused image.
+                softwareBitmap = Interlocked.Exchange(ref _backBuffer, softwareBitmap);
+                softwareBitmap?.Dispose();
+
+                // Changes to XAML ImageElement must happen on UI thread through Dispatcher
+                var task = _imageElement.Dispatcher.RunAsync(CoreDispatcherPriority.Normal,
+                    async () =>
+                    {
+                // Don't let two copies of this task run at the same time.
+                if (_taskRunning)
+                        {
+                            return;
+                        }
+                        _taskRunning = true;
+
+                // Keep draining frames from the backbuffer until the backbuffer is empty.
+                SoftwareBitmap latestBitmap;
+                        while ((latestBitmap = Interlocked.Exchange(ref _backBuffer, null)) != null)
+                        {
+                            var imageSource = (SoftwareBitmapSource)_imageElement.Source;
+                            await imageSource.SetBitmapAsync(latestBitmap);
+                            latestBitmap.Dispose();
+                        }
+
+                        _taskRunning = false;
+                    });
+            }
+
+            mediaFrameReference.Dispose();
         }
 
         /// <summary>
