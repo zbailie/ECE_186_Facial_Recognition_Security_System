@@ -2,7 +2,8 @@
   "dependencies": {
     "Microsoft.NETCore.UniversalWindowsPlatform": "5.2.3",
     "Microsoft.ProjectOxford.Face": "1.2.5",
-    "Microsoft.ProjectOxford.Video": "1.2.0"
+    "Microsoft.ProjectOxford.Video": "1.2.0",
+    "Newtonsoft.Json": "10.0.2"
   },
   "frameworks": {
     "uap10.0": {}

@@ -31,10 +31,11 @@ using Windows.Foundation;
 using Windows.Foundation.Collections;
 using Windows.UI.Xaml;
 using Windows.UI.Xaml.Controls;
+using Windows.Media;
 using Windows.Media.Capture;
 using Windows.Media.Capture.Frames;
 using Windows.Media.MediaProperties;
-using Windows.Storage;
+using Windows.Storage; 
 using Windows.Storage.Streams;
 using Windows.UI.Xaml.Controls.Primitives;
 using Windows.UI.Xaml.Data;
@@ -52,6 +53,8 @@ using Windows.Devices.Enumeration;
 using System.Threading;
 using Windows.UI.Core;
 using System.Threading.Tasks;
+using Windows.Storage.Pickers;
+
 
 
 //Include the package for face api
@@ -251,114 +254,113 @@ namespace fr_newer
                 status.Text = "Camera preview succeeded";
 
 
-// ---------------------------------------------------------------------------------------------------------
-// -------------- The stuff for the frame source -----------------------------------------------------------
+                // ---------------------------------------------------------------------------------------------------------
+                // -------------- The stuff for the frame source -----------------------------------------------------------
                 //Take out the frames from the camera preview
-                var frameSourceGroups = await MediaFrameSourceGroup.FindAllAsync();
-                MediaFrameSourceGroup selectedGroup = null;
-                MediaFrameSourceInfo colorSourceInfo = null;
+                captureImage.Source = null;
+                // Get information about the preview
+                var previewProperties = mediaCapture.VideoDeviceController.GetMediaStreamProperties(MediaStreamType.VideoPreview) as VideoEncodingProperties;
 
-                foreach (var sourceGroup in frameSourceGroups)
+                // Create a video frame in the desired format for the preview frame
+                VideoFrame videoFrame = new VideoFrame(BitmapPixelFormat.Bgra8, (int)previewProperties.Width, (int)previewProperties.Height);
+
+                VideoFrame previewFrame = await mediaCapture.GetPreviewFrameAsync(videoFrame);
+
+                SoftwareBitmap previewBitmap = previewFrame.SoftwareBitmap;
+
+
+
+                
+
+                var outputFile= await KnownFolders.PicturesLibrary.CreateFileAsync(
+                    PHOTO_FILE_NAME, CreationCollisionOption.GenerateUniqueName);
+                ImageEncodingProperties imageProperties = ImageEncodingProperties.CreateJpeg();
+                await mediaCapture.CapturePhotoToStorageFileAsync(imageProperties, photoFile);
+               // takePhoto.IsEnabled = true;
+                status.Text = "Take Photo succeeded: " + photoFile.Path;
+
+
+
+                //FileSavePicker fileSavePicker = new FileSavePicker();
+                //fileSavePicker.SuggestedStartLocation = KnownFolders.PicturesLibrary;
+                //fileSavePicker.FileTypeChoices.Add("JPEG files", new List<string>() { ".jpg" });
+                //fileSavePicker.SuggestedFileName = "image";
+
+                //var outputFile = await fileSavePicker.PickSaveFileAsync();
+
+                if (outputFile == null)
                 {
-                    foreach (var sourceInfo in sourceGroup.SourceInfos)
-                    {
-                        if (sourceInfo.MediaStreamType == MediaStreamType.VideoPreview
-                            && sourceInfo.SourceKind == MediaFrameSourceKind.Color)
-                        {
-                            colorSourceInfo = sourceInfo;
-                            break;
-                        }
-                    }
-                    if (colorSourceInfo != null)
-                    {
-                        selectedGroup = sourceGroup;
-                        break;
-                    }
-                }
-
-                    var selectedGroupObjects = frameSourceGroups.Select(group =>
-       new
-       {
-           sourceGroup = group,
-           colorSourceInfo = group.SourceInfos.FirstOrDefault((sourceInfo) =>
-           {
-               return sourceInfo.MediaStreamType == MediaStreamType.VideoPreview
-               && sourceInfo.SourceKind == MediaFrameSourceKind.Color
-               && sourceInfo.DeviceInformation?.EnclosureLocation.Panel == Windows.Devices.Enumeration.Panel.Front;
-           })
-
-       }).Where(t => t.colorSourceInfo != null)
-       .FirstOrDefault();
-
-                   /* MediaFrameSourceGroup*/ selectedGroup = selectedGroupObjects?.sourceGroup;
-                    /*MediaFrameSourceInfo*/ colorSourceInfo = selectedGroupObjects?.colorSourceInfo;
-
-                    if (selectedGroup == null)
-                    {
-                        return;
-                    }
-
-                //MediaCapture mediaCapture;
-                var settings = new MediaCaptureInitializationSettings()
-                {
-                    SourceGroup = selectedGroup,
-                    SharingMode = MediaCaptureSharingMode.ExclusiveControl,
-                    MemoryPreference = MediaCaptureMemoryPreference.Cpu,
-                    StreamingCaptureMode = StreamingCaptureMode.Video
-                };
-                try
-                {
-                    await mediaCapture.InitializeAsync(settings);
-                }
-                catch (Exception ex)
-                {
-                    System.Diagnostics.Debug.WriteLine("MediaCapture initialization failed: " + ex.Message);
-                    return;
-                }
-                var colorFrameSource = mediaCapture.FrameSources[colorSourceInfo.Id];
-                var preferredFormat = colorFrameSource.SupportedFormats.Where(format =>
-                {
-                    return format.VideoFormat.Width >= 1080
-                    && format.Subtype == MediaEncodingSubtypes.Argb32;
-
-                }).FirstOrDefault();
-
-                if (preferredFormat == null)
-                {
-                    // Our desired format is not supported
+                    // The user cancelled the picking operation
                     return;
                 }
 
-                await colorFrameSource.SetFormatAsync(preferredFormat);
+                SaveSoftwareBitmapToFile(previewBitmap, outputFile);
 
-                MediaFrameReader _mediaFrameReader;
+                var filepath = outputFile.Path;
 
-                _mediaFrameReader = await mediaCapture.CreateFrameReaderAsync(colorFrameSource, MediaEncodingSubtypes.Argb32);
-                _mediaFrameReader.FrameArrived += ColorFrameReader_FrameArrived; 
-                await _mediaFrameReader.StartAsync();
+                //using (Stream s = (Stream)photoStream)
+                //{
+                var faces = await faceServiceClient.DetectAsync(filepath, true, true);
 
-                await _mediaFrameReader.StopAsync();
-                _mediaFrameReader.FrameArrived -= ColorFrameReader_FrameArrived;
-                mediaCapture.Dispose();
-                mediaCapture = null;
+                foreach (var face in faces)
+                {
+                    var rect = face.FaceRectangle;
+                    var landmarks = face.FaceLandmarks;
+                }
 
 
 
+                previewFrame.Dispose();
+                previewFrame = null;
 
-                // --------------------------------------------------------------------------------------------------------
 
-                //    //using (Stream s = (Stream)photoStream)
-                //    //{
-                //    var faces = await faceServiceClient.DetectAsync(picture, true, true);
 
-                //        foreach (var face in faces)
-                //        {
-                //            var rect = face.FaceRectangle;
-                //            var landmarks = face.FaceLandmarks;
+                IRandomAccessStream photoStream = await outputFile.OpenReadAsync();
+                //BitmapImage photoFile = new BitmapImage();
+                BitmapImage bitmap = new BitmapImage();
+                //photoFile.SetSource(photoStream);
+                bitmap.SetSource(photoStream);
+                //captureImage.Source = photoFile;
+                captureImage.Source = bitmap;
 
-                //        }
+                
+
+                //After this, call the frame that was just identified to be displayed in one of the three panes of
+                // the XAML 
+                //https://social.msdn.microsoft.com/Forums/expression/en-US/33bc4fa3-9997-4fd0-8445-ee4de41d8076/uwpdisplay-image-byte-based-in-xaml-image-source?forum=wpdevelop
+                //
+
+
+                string sourceDire = @"C:\Data\Users\DefaultAccount\Pictures";
+                deletephoto(sourceDire);
+
+
+                //// Deleting all the File from a memory location
+                //string sourceDir = @"C:\Data\Users\DefaultAccount\Pictures";
+
+                //try
+                //{
+                //    string[] photos = Directory.GetFiles(sourceDir, "*.jpg");
+
+                //    //copy picture files from the above location
+                //    foreach(string f in photos)
+                //    {
+                //        // Remove path from the file name
+                //        string fName = f.Substring(sourceDir.Length + 1);
                 //    }
+                    
+                //    foreach( string f in photos)
+                //    {
+                //        File.Delete(f);
+                //    }
+                    
+                //}
+                //catch(DirectoryNotFoundException dirNotFound)
+                //{
+                //    Console.WriteLine(dirNotFound);
+                //}
 
+                //----------------------------------------------------------------------
 
                 // Enable buttons for video and photo capture
                 SetVideoButtonVisibility(Action.ENABLE);
@@ -372,6 +374,35 @@ namespace fr_newer
             }
         }
 
+        private static void deletephoto(string sourceDir)
+        {
+
+
+            // Deleting all the File from a memory location
+
+            try
+            {
+                string[] photos = Directory.GetFiles(sourceDir, "*.jpg");
+
+                //copy picture files from the above location
+                foreach (string f in photos)
+                {
+                    // Remove path from the file name
+                    string fName = f.Substring(sourceDir.Length + 1);
+                }
+
+                foreach (string f in photos)
+                {
+                    File.Delete(f);
+                }
+
+            }
+            catch (DirectoryNotFoundException dirNotFound)
+            {
+                Console.WriteLine(dirNotFound);
+            }
+        }
+
         private void cleanup_Click(object sender, RoutedEventArgs e)
         {
             SetInitButtonVisibility(Action.DISABLE);
@@ -380,44 +411,91 @@ namespace fr_newer
             Cleanup();
         }
 
-        //Function to read the frames from the video preview
-   /*   private async void rect(string[] args)
+
+
+        //Function that stores the Softwarebitmap image to a file
+        private async void SaveSoftwareBitmapToFile(SoftwareBitmap softwareBitmap, StorageFile outputFile)
         {
-            FaceDetectionEffect _faceDetectionEffect; 
-
-            // Create the definition, which will contain some initialization settings
-            var definition = new FaceDetectionEffectDefinition();
-
-            // To ensure preview smoothness, do not delay incoming samples
-            definition.SynchronousDetectionEnabled = false;
-
-            // In this scenario, choose detection speed over accuracy
-            definition.DetectionMode = FaceDetectionMode.HighPerformance;
-
-            // Add the effect to the preview stream
-            _faceDetectionEffect = (FaceDetectionEffect)await mediaCapture.AddVideoEffectAsync(definition, MediaStreamType.VideoPreview);
-
-            // Choose the shortest interval between detection events
-            _faceDetectionEffect.DesiredDetectionInterval = TimeSpan.FromMilliseconds(33);
-
-            // Start detecting faces
-            _faceDetectionEffect.Enabled = true;
-
-        }
-
-        private void FaceDetectionEffect_FaceDetected(FaceDetectionEffect sender, FaceDetectedEventArgs args)
-        {
-            //public struct BitmapBounds;
-
-            foreach (Windows.Media.FaceAnalysis.DetectedFace face in args.ResultFrame.DetectedFaces)
+            using (IRandomAccessStream stream = await outputFile.OpenAsync(FileAccessMode.ReadWrite))
             {
-                BitmapBounds faceRect = face.FaceBox;
+                // Create an encoder with the desired format
+                BitmapEncoder encoder = await BitmapEncoder.CreateAsync(BitmapEncoder.JpegEncoderId, stream);
 
-                // Draw a rectangle on the preview stream for each face
+                // Set the software bitmap
+                encoder.SetSoftwareBitmap(softwareBitmap);
+
+                // Set additional encoding parameters, if needed
+                encoder.BitmapTransform.ScaledWidth = 320;
+                encoder.BitmapTransform.ScaledHeight = 240;
+                encoder.BitmapTransform.Rotation = Windows.Graphics.Imaging.BitmapRotation.Clockwise90Degrees;
+                encoder.BitmapTransform.InterpolationMode = BitmapInterpolationMode.Fant;
+                encoder.IsThumbnailGenerated = true;
+
+                try
+                {
+                    await encoder.FlushAsync();
+                }
+                catch (Exception err)
+                {
+                    switch (err.HResult)
+                    {
+                        case unchecked((int)0x88982F81): //WINCODEC_ERR_UNSUPPORTEDOPERATION
+                                                         // If the encoder does not support writing a thumbnail, then try again
+                                                         // but disable thumbnail generation.
+                            encoder.IsThumbnailGenerated = false;
+                            break;
+                        default:
+                            throw err;
+                    }
+                }
+
+                if (encoder.IsThumbnailGenerated == false)
+                {
+                    await encoder.FlushAsync();
+                }
+
+
             }
         }
 
-    */ 
+        //Function to read the frames from the video preview
+        /*   private async void rect(string[] args)
+             {
+                 FaceDetectionEffect _faceDetectionEffect; 
+
+                 // Create the definition, which will contain some initialization settings
+                 var definition = new FaceDetectionEffectDefinition();
+
+                 // To ensure preview smoothness, do not delay incoming samples
+                 definition.SynchronousDetectionEnabled = false;
+
+                 // In this scenario, choose detection speed over accuracy
+                 definition.DetectionMode = FaceDetectionMode.HighPerformance;
+
+                 // Add the effect to the preview stream
+                 _faceDetectionEffect = (FaceDetectionEffect)await mediaCapture.AddVideoEffectAsync(definition, MediaStreamType.VideoPreview);
+
+                 // Choose the shortest interval between detection events
+                 _faceDetectionEffect.DesiredDetectionInterval = TimeSpan.FromMilliseconds(33);
+
+                 // Start detecting faces
+                 _faceDetectionEffect.Enabled = true;
+
+             }
+
+             private void FaceDetectionEffect_FaceDetected(FaceDetectionEffect sender, FaceDetectedEventArgs args)
+             {
+                 //public struct BitmapBounds;
+
+                 foreach (Windows.Media.FaceAnalysis.DetectedFace face in args.ResultFrame.DetectedFaces)
+                 {
+                     BitmapBounds faceRect = face.FaceBox;
+
+                     // Draw a rectangle on the preview stream for each face
+                 }
+             }
+
+         */
 
         /// <summary>
         /// 'Initialize Audio Only' button action function
@@ -507,18 +585,19 @@ namespace fr_newer
                 takePhoto.IsEnabled = true;
                 status.Text = "Take Photo succeeded: " + photoFile.Path;
 
+                System.Console.WriteLine("The photofile path: {0}!", photoFile.Path); 
+
+                //IRandomAccessStream photoStream = await photoFile.OpenReadAsync(); 
+                ////BitmapImage photoFile = new BitmapImage();
+                //BitmapImage bitmap = new BitmapImage(); 
+                ////photoFile.SetSource(photoStream);
+                //bitmap.SetSource(photoStream);
+                ////captureImage.Source = photoFile;
+                //captureImage.Source = bitmap;
 
 
-                IRandomAccessStream photoStream = await photoFile.OpenReadAsync();
-                //BitmapImage photoFile = new BitmapImage();
-                BitmapImage bitmap = new BitmapImage(); 
-                //photoFile.SetSource(photoStream);
-                bitmap.SetSource(photoStream);
-                //captureImage.Source = photoFile;
-                captureImage.Source = bitmap;
 
-
-                var picture = photoFile.Path;
+                //var picture = photoFile.Path;
 
                 //Call the rect face identification here
                 // using the path (bitmap)or(photoFile)
@@ -591,6 +670,10 @@ namespace fr_newer
                     status.Text = "Stopping video recording...";
                     await mediaCapture.StopRecordAsync();
                     isRecording = false;
+
+
+
+
 
                     var stream = await recordStorageFile.OpenReadAsync();
                     playbackElement.AutoPlay = true;
@@ -677,50 +760,6 @@ namespace fr_newer
             }
         }
 
-        private void ColorFrameReader_FrameArrived(MediaFrameReader sender, MediaFrameArrivedEventArgs args)
-        {
-            var mediaFrameReference = sender.TryAcquireLatestFrame();
-            var videoMediaFrame = mediaFrameReference?.VideoMediaFrame;
-            var softwareBitmap = videoMediaFrame?.SoftwareBitmap;
-
-            if (softwareBitmap != null)
-            {
-                if (softwareBitmap.BitmapPixelFormat != Windows.Graphics.Imaging.BitmapPixelFormat.Bgra8 ||
-                    softwareBitmap.BitmapAlphaMode != Windows.Graphics.Imaging.BitmapAlphaMode.Premultiplied)
-                {
-                    softwareBitmap = SoftwareBitmap.Convert(softwareBitmap, BitmapPixelFormat.Bgra8, BitmapAlphaMode.Premultiplied);
-                }
-
-                // Swap the processed frame to _backBuffer and dispose of the unused image.
-                softwareBitmap = Interlocked.Exchange(ref _backBuffer, softwareBitmap);
-                softwareBitmap?.Dispose();
-
-                // Changes to XAML ImageElement must happen on UI thread through Dispatcher
-                var task = _imageElement.Dispatcher.RunAsync(CoreDispatcherPriority.Normal,
-                    async () =>
-                    {
-                // Don't let two copies of this task run at the same time.
-                if (_taskRunning)
-                        {
-                            return;
-                        }
-                        _taskRunning = true;
-
-                // Keep draining frames from the backbuffer until the backbuffer is empty.
-                SoftwareBitmap latestBitmap;
-                        while ((latestBitmap = Interlocked.Exchange(ref _backBuffer, null)) != null)
-                        {
-                            var imageSource = (SoftwareBitmapSource)_imageElement.Source;
-                            await imageSource.SetBitmapAsync(latestBitmap);
-                            latestBitmap.Dispose();
-                        }
-
-                        _taskRunning = false;
-                    });
-            }
-
-            mediaFrameReference.Dispose();
-        }
 
         /// <summary>
         /// Callback function for any failures in MediaCapture operations
