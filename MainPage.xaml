@@ -12,12 +12,12 @@
         <SolidColorBrush x:Key="TranslucentBlackBrush" Color="Black" Opacity="0.3"/>
     </Page.Resources>
 
-    <Grid Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
+    <Grid Background="{ThemeResource ApplicationPageBackgroundThemeBrush }">
         <Grid.Resources>
             <Style TargetType="Button">
                 <Setter Property="Margin" Value="10,40"/>
-                <Setter Property="MinWidth" Value="80"/>
-                <Setter Property="MinHeight" Value="80"/>
+                <Setter Property="MinWidth" Value="60"/>
+                <Setter Property="MinHeight" Value="60"/>
                 <Setter Property="Foreground" Value="White"/>
                 <Setter Property="Background" Value="{StaticResource TranslucentBlackBrush}"/>
                 <Setter Property="BorderBrush" Value="White"/>
@@ -45,20 +45,20 @@
                 </Viewbox>
             </Button>
         </StackPanel>
-        <StackPanel HorizontalAlignment="Right" VerticalAlignment="Top">
-            <Button x:Name="face_init" Content ="Facial Recognition" Tapped="initface_Click"/>
+        <StackPanel HorizontalAlignment="Right" VerticalAlignment="Center" Height="525" >
+                <Button x:Name="face_init" Content ="Facial Recognition" Tapped="initface_Click"/>
         </StackPanel>
-        <StackPanel HorizontalAlignment="Right" VerticalAlignment="Bottom" Height="170">
+        <StackPanel HorizontalAlignment="Right" VerticalAlignment="Bottom" Height="265">
             <Button x:Name="identify_init" Content ="Identification" Tapped="IdentifyFace_Click"/>
         </StackPanel>
-        <StackPanel HorizontalAlignment="Right" VerticalAlignment="Center" Height="330">
-            <Button x:Name="traingroup" Content ="TrainGroup" Tapped="TrainGroup_Click"/>
-        </StackPanel>
-        <StackPanel HorizontalAlignment="Right" VerticalAlignment="Center" Height="490" >
+        <StackPanel HorizontalAlignment="Right" VerticalAlignment="Top">
             <Button x:Name="photo_init" Content ="Take Photo" Tapped="takephoto_Click"/>
         </StackPanel>
-        <StackPanel HorizontalAlignment="Right" VerticalAlignment="Bottom" Height="250" >
-            <Button x:Name="detect_init" Content ="Person Group" Tapped="GeneratePersonGroup_Click"/>
+        <StackPanel HorizontalAlignment="Right" VerticalAlignment="Center" Height="400">
+                <Button x:Name="detect_init" Content ="Person Group" Tapped="GeneratePersonGroup_Click"/>
+        </StackPanel>
+        <StackPanel HorizontalAlignment="Right" VerticalAlignment="Center" Height="270">
+            <Button x:Name="newperson" Content ="Add Person" Tapped="NewPersonGroup_Click"/>
         </StackPanel>
         <StackPanel HorizontalAlignment="Right" VerticalAlignment="Bottom" Height="325" >
             <Button x:Name="cleanup" Content ="Cleanup" Tapped="cleanup_Click"/>

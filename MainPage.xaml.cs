@@ -89,8 +89,10 @@ namespace fr_newest
 
         private SoftwareBitmap bitmapSource;
         private const string personGroupId = "family3";
+        private const string guestId = "guest";
         private MediaCapture mediaCapture;
         private StorageFile photoFile;
+        private StorageFile GuestFile;
         private StorageFile dir;
         private readonly string PHOTO_FILE_NAME = "photo.jpg";
         private IMediaEncodingProperties _previewProperties;
@@ -645,69 +647,21 @@ namespace fr_newest
             }
         }
 
-        // May be ableto use this part to create new users and add new users to the directory
-        private async void GeneratePersonGroup_Click(object sender, RoutedEventArgs e)
+        private async void NewPersonGroup_Click(object sender, RoutedEventArgs e)
         {
-            try
-            {
-                //await faceServiceClient.CreatePersonGroupAsync(personGroupId, "Family_3");
-                //CreatePersonResult maria = await faceServiceClient.CreatePersonAsync(personGroupId, "Maria");
-                //const string meImageDir = @"C:\Data\Users\DefaultAccount\Pictures\MariaFolder\";
-                CreatePersonResult yve = await faceServiceClient.CreatePersonAsync(personGroupId, "Yvette");
-                const string yveImageDir = @"C:\Data\Users\DefaultAccount\Pictures\YveFolder";
-                //CreatePersonResult maryan = await faceServiceClient.CreatePersonAsync(personGroupId, "Maryam");
-                //const string mcharImageDir = @"C:\Data\Users\DefaultAccount\Pictures\MaryamFolder\";
+            CreatePersonResult guest = await faceServiceClient.CreatePersonAsync(personGroupId, "Guest");
 
-                await Windows.ApplicationModel.Core.CoreApplication.MainView.CoreWindow.Dispatcher.RunAsync(CoreDispatcherPriority.Normal,
-   async () =>
-   {
+            //if (guest != null)
+            //{
+            //    await faceServiceClient.DeletePersonAsync(personGroupId, guest.PersonId); 
+            //    //The data of the past user has been deleted
+            //}
 
-    //}
-    //);
+            Stream s = await photoFile.OpenStreamForReadAsync();
+            await faceServiceClient.AddPersonFaceAsync(personGroupId, guest.PersonId, s);
 
-    // await Task.Run(async () =>
-    // {
-    //foreach (var path in Directory.GetFiles(meImageDir, "*.jpg"))
-    //{
-    //    using (Stream s = File.OpenRead(path))
-    //    {
-    //        await faceServiceClient.AddPersonFaceAsync(personGroupId, maria.PersonId, s);
-    //    }
-    //    status.Text = "Person group generated! "; 
-    //}
-
-    foreach (var path1 in Directory.GetFiles(yveImageDir, "*.jpg"))
-       {
-           using (Stream s = File.OpenRead(path1))
-           {
-               await faceServiceClient.AddPersonFaceAsync(personGroupId, yve.PersonId, s);
-           }
-       }
-    //foreach (var path2 in Directory.GetFiles(mcharImageDir, "*.jpg"))
-    //{
-    //    using (Stream s = File.OpenRead(path2))
-    //    {
-    //        await faceServiceClient.AddPersonFaceAsync(personGroupId, maryan.PersonId, s);
-    //    }
-    //}
-    status.Text = "Inside the Task to create the person group";
-
-   });
-                status.Text = "The person group has been created"; 
-
-            }
-            catch (FaceAPIException ex)
-            {
-                status.Text = "Exception thrown" + ex.ErrorMessage;
-            }
-            //face_init.IsEnabled = true;
-            //identify_init.IsEnabled = false;
-            //traingroup.IsEnabled = true;
-            //cleanup.IsEnabled = true;
-        }
-
-        private async void TrainGroup_Click(object sender, RoutedEventArgs e)
-        {
+            // Training of the new user will now begin. 
+            status.Text = "Training of the new user will now begin"; 
             await faceServiceClient.TrainPersonGroupAsync(personGroupId);
             TrainingStatus sstatus = null;
 
@@ -721,14 +675,58 @@ namespace fr_newest
                     break;
                 }
                 await Task.Delay(1000);
-                //IdentifyFace();
             }
-            //face_init.IsEnabled = true;
-            //identify_init.IsEnabled = true;
-            //traingroup.IsEnabled = false;
-            //detect_init.IsEnabled = false; //generate the person group
-            //cleanup.IsEnabled = true;
+            status.Text = "Training of the new user has been completed. ";
         }
+
+        private async void GeneratePersonGroup_Click(object sender, RoutedEventArgs e)
+        {
+            CreatePersonResult yve = await faceServiceClient.CreatePersonAsync(personGroupId, "Yvette");
+           // StorageFile yveImageDir = @"C:\Data\Users\DefaultAccount\Pictures\YveFolder\636294255522489954.jpg\";
+            Stream s = await photoFile.OpenStreamForReadAsync();
+            await faceServiceClient.AddPersonFaceAsync(personGroupId, yve.PersonId, s);
+
+
+            //The training of the users above. 
+            await faceServiceClient.TrainPersonGroupAsync(personGroupId);
+            TrainingStatus sstatus = null;
+
+            while (true)
+            {
+                sstatus = await faceServiceClient.GetPersonGroupTrainingStatusAsync(personGroupId);
+
+                if (sstatus.Status != Status.Running)
+                {
+                    status.Text = "Person group training complete";
+                    break;
+                }
+                await Task.Delay(1000);
+            }
+        }
+
+        //private async void TrainGroup_Click(object sender, RoutedEventArgs e)
+        //{
+        //    await faceServiceClient.TrainPersonGroupAsync(personGroupId);
+        //    TrainingStatus sstatus = null;
+
+        //    while (true)
+        //    {
+        //        sstatus = await faceServiceClient.GetPersonGroupTrainingStatusAsync(personGroupId);
+
+        //        if (sstatus.Status != Status.Running)
+        //        {
+        //            status.Text = "Person group training complete";
+        //            break;
+        //        }
+        //        await Task.Delay(1000);
+        //        //IdentifyFace();
+        //    }
+        //    //face_init.IsEnabled = true;
+        //    //identify_init.IsEnabled = true;
+        //    //traingroup.IsEnabled = false;
+        //    //detect_init.IsEnabled = false; //generate the person group
+        //    //cleanup.IsEnabled = true;
+        //}
 
 
         private void cleanup_Click(object sender, RoutedEventArgs e)
