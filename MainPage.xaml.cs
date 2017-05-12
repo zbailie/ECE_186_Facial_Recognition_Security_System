@@ -89,8 +89,10 @@ namespace fr_newest
 
         private SoftwareBitmap bitmapSource;
         private const string personGroupId = "family3";
+        private const string guestId = "guest";
         private MediaCapture mediaCapture;
         private StorageFile photoFile;
+        private StorageFile GuestFile;
         private StorageFile dir;
         private readonly string PHOTO_FILE_NAME = "photo.jpg";
         private IMediaEncodingProperties _previewProperties;
@@ -100,7 +102,7 @@ namespace fr_newest
 //GPIO stuff
 
         private GpioPin pin;
-        private const int LED_PIN = 12;
+        private const int LED_PIN = 5;
         private GpioPinValue pinValue;
         private DispatcherTimer timer;
 
@@ -352,8 +354,7 @@ namespace fr_newest
             // Debug.WriteLine("The number of faces is" + faceNumber); 
         }
 
-
-
+       
         /// <summary>
         /// Iterates over all detected faces, creating and adding Rectangles to the FacesCanvas as face bounding boxes
         /// </summary>
@@ -383,8 +384,7 @@ namespace fr_newest
                 Debug.WriteLine("The faces should have been highlisted by now");
             }
         }
-
-
+        
         /// <summary>
         /// Takes face information defined in preview coordinates and returns one in UI coordinates, taking
         /// into account the position and size of the preview control.
@@ -521,12 +521,6 @@ namespace fr_newest
             FaceRectangle[] faceRects = await UploadAndDetectFaces();
             status.Text = $"Detection finished. {faceRects.Length} face(s) detected";
 
-            //identify_init.IsEnabled = false;
-            //traingroup.IsEnabled = false;
-            //detect_init.IsEnabled = true; //generate the person group
-            //traingroup.IsEnabled = false;
-            //cleanup.IsEnabled = true;
-
             //if (faceRects.Length > 0)
             //{
             //    //MarkFaces(faceRects);
@@ -615,9 +609,9 @@ namespace fr_newest
                         {
                             var candidateId = identityResult.Candidates[0].PersonId;
                             var person = await faceServiceClient.GetPersonAsync(personGroupId, candidateId);
-                            resultText.Append($"Authorized User Detected: {person.Name}\t  Door will be unlocked. \t");
+                           // resultText.Append($"Authorized User Detected: {person.Name}\t  Door will be unlocked. \t");
+                            status.Text = $"Authorized User Detected: {person.Name}. \t Door will be unlocked. \t";
                             await Timer_Tick();
-
                             pinValue = GpioPinValue.Low;
                             pin.Write(pinValue);
                             pin.SetDriveMode(GpioPinDriveMode.Output);
@@ -627,9 +621,9 @@ namespace fr_newest
                     if (resultText.ToString().Equals($"{results.Length} face(s) detected! \t"))
                     {
                         status.Text = "Cannot unlock door."; 
-                        resultText.Append("No persons identified\t");
+                       // resultText.Append("No persons identified\t");
                     }
-                    status.Text = resultText.ToString();
+                    //status.Text = resultText.ToString();
 
                 }
                 catch (FaceAPIException ex)
@@ -637,77 +631,24 @@ namespace fr_newest
                     status.Text = "An error occurred of type:" + ex.ErrorCode; //ex.message
                 }
 
-                //traingroup.IsEnabled = false;
-                //detect_init.IsEnabled = false; //generate the person group
-                //traingroup.IsEnabled = false;
-                //cleanup.IsEnabled = true;
-
             }
         }
 
-        // May be ableto use this part to create new users and add new users to the directory
-        private async void GeneratePersonGroup_Click(object sender, RoutedEventArgs e)
+        private async void NewPersonGroup_Click(object sender, RoutedEventArgs e)
         {
-            try
-            {
-                //await faceServiceClient.CreatePersonGroupAsync(personGroupId, "Family_3");
-                //CreatePersonResult maria = await faceServiceClient.CreatePersonAsync(personGroupId, "Maria");
-                //const string meImageDir = @"C:\Data\Users\DefaultAccount\Pictures\MariaFolder\";
-                CreatePersonResult yve = await faceServiceClient.CreatePersonAsync(personGroupId, "Yvette");
-                const string yveImageDir = @"C:\Data\Users\DefaultAccount\Pictures\YveFolder";
-                //CreatePersonResult maryan = await faceServiceClient.CreatePersonAsync(personGroupId, "Maryam");
-                //const string mcharImageDir = @"C:\Data\Users\DefaultAccount\Pictures\MaryamFolder\";
+            CreatePersonResult guest = await faceServiceClient.CreatePersonAsync(personGroupId, "Guest");
 
-                await Windows.ApplicationModel.Core.CoreApplication.MainView.CoreWindow.Dispatcher.RunAsync(CoreDispatcherPriority.Normal,
-   async () =>
-   {
+            //if (guest != null)
+            //{
+            //    await faceServiceClient.DeletePersonAsync(personGroupId, guest.PersonId); 
+            //    //The data of the past user has been deleted
+            //}
 
-    //}
-    //);
+            Stream s = await photoFile.OpenStreamForReadAsync();
+            await faceServiceClient.AddPersonFaceAsync(personGroupId, guest.PersonId, s);
 
-    // await Task.Run(async () =>
-    // {
-    //foreach (var path in Directory.GetFiles(meImageDir, "*.jpg"))
-    //{
-    //    using (Stream s = File.OpenRead(path))
-    //    {
-    //        await faceServiceClient.AddPersonFaceAsync(personGroupId, maria.PersonId, s);
-    //    }
-    //    status.Text = "Person group generated! "; 
-    //}
-
-    foreach (var path1 in Directory.GetFiles(yveImageDir, "*.jpg"))
-       {
-           using (Stream s = File.OpenRead(path1))
-           {
-               await faceServiceClient.AddPersonFaceAsync(personGroupId, yve.PersonId, s);
-           }
-       }
-    //foreach (var path2 in Directory.GetFiles(mcharImageDir, "*.jpg"))
-    //{
-    //    using (Stream s = File.OpenRead(path2))
-    //    {
-    //        await faceServiceClient.AddPersonFaceAsync(personGroupId, maryan.PersonId, s);
-    //    }
-    //}
-    status.Text = "Inside the Task to create the person group";
-
-   });
-                status.Text = "The person group has been created"; 
-
-            }
-            catch (FaceAPIException ex)
-            {
-                status.Text = "Exception thrown" + ex.ErrorMessage;
-            }
-            //face_init.IsEnabled = true;
-            //identify_init.IsEnabled = false;
-            //traingroup.IsEnabled = true;
-            //cleanup.IsEnabled = true;
-        }
-
-        private async void TrainGroup_Click(object sender, RoutedEventArgs e)
-        {
+            // Training of the new user will now begin. 
+            status.Text = "Training of the new user will now begin"; 
             await faceServiceClient.TrainPersonGroupAsync(personGroupId);
             TrainingStatus sstatus = null;
 
@@ -721,14 +662,59 @@ namespace fr_newest
                     break;
                 }
                 await Task.Delay(1000);
-                //IdentifyFace();
             }
-            //face_init.IsEnabled = true;
-            //identify_init.IsEnabled = true;
-            //traingroup.IsEnabled = false;
-            //detect_init.IsEnabled = false; //generate the person group
-            //cleanup.IsEnabled = true;
+            status.Text = "Training of the new user has been completed. ";
         }
+
+        private async void GeneratePersonGroup_Click(object sender, RoutedEventArgs e)
+        {
+            CreatePersonResult zach = await faceServiceClient.CreatePersonAsync(personGroupId, "Zachary");
+           // StorageFile yveImageDir = @"C:\Data\Users\DefaultAccount\Pictures\YveFolder\636294255522489954.jpg\";
+            Stream s = await photoFile.OpenStreamForReadAsync();
+            await faceServiceClient.AddPersonFaceAsync(personGroupId, zach.PersonId, s);
+            status.Text = "Person created!";
+            await Task.Delay(1000);
+
+            //The training of the users above. 
+            await faceServiceClient.TrainPersonGroupAsync(personGroupId);
+            TrainingStatus sstatus = null;
+
+            while (true)
+            {
+                sstatus = await faceServiceClient.GetPersonGroupTrainingStatusAsync(personGroupId);
+
+                if (sstatus.Status != Status.Running)
+                {
+                    status.Text = "Person group training complete";
+                    break;
+                }
+                await Task.Delay(1000);
+            }
+        }
+
+        //private async void TrainGroup_Click(object sender, RoutedEventArgs e)
+        //{
+        //    await faceServiceClient.TrainPersonGroupAsync(personGroupId);
+        //    TrainingStatus sstatus = null;
+
+        //    while (true)
+        //    {
+        //        sstatus = await faceServiceClient.GetPersonGroupTrainingStatusAsync(personGroupId);
+
+        //        if (sstatus.Status != Status.Running)
+        //        {
+        //            status.Text = "Person group training complete";
+        //            break;
+        //        }
+        //        await Task.Delay(1000);
+        //        //IdentifyFace();
+        //    }
+        //    //face_init.IsEnabled = true;
+        //    //identify_init.IsEnabled = true;
+        //    //traingroup.IsEnabled = false;
+        //    //detect_init.IsEnabled = false; //generate the person group
+        //    //cleanup.IsEnabled = true;
+        //}
 
 
         private void cleanup_Click(object sender, RoutedEventArgs e)
@@ -759,11 +745,11 @@ namespace fr_newest
                 catch (Exception)
                 {
                 }
-                finally
-                {
-                    SetInitButtonVisibility(Action.DISABLE);
-                    //status.Text += "\nCheck if camera is diconnected. Try re-launching the app";
-                }
+                //finally
+                //{
+                //    SetInitButtonVisibility(Action.DISABLE);
+                //    //status.Text += "\nCheck if camera is diconnected. Try re-launching the app";
+                //}
             });
             //face_init.IsEnabled = true;
             //identify_init.IsEnabled = false;
